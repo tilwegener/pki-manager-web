@@ -21,7 +21,7 @@ scheme for external issuance. The gateway `/scep` protocol runs on its own serve
 | `POST /scep?operation=PKIOperation` | `application/x-pki-message` |
 | Legacy GET `PKIOperation&message=<URL-encoded base64>` | Supported within HTTP header limits |
 | Initial `PKCSReq` | Immediate signed/encrypted `CertRep` success or failure |
-| `RenewalReq` / `UpdateReq` | Managed modes: fresh MDM validation plus active, service-owned old signer |
+| `RenewalReq` / `UpdateReq` | Active, service-owned old signer plus shared challenge or fresh MDM validation |
 | Response cryptography | SHA-256/RSA PKCS#1 signatures; AES-256-CBC envelopes |
 | Device keys | RSA, 2048–8192 bits; signer and CSR must use the same key |
 | CSR identity | Nonempty CN, maximum 128 bytes; managed modes support DNS, IP, email, URI and Microsoft UPN SANs |
@@ -118,19 +118,21 @@ and add `--env-file scep/.env` to every Compose command below.
    sudo chmod 0400 docker/scep-secrets/*
    ```
 
-3. Build, provision the RA once, and start only the gateway:
+3. Build and start only the gateway. Compose enables automatic first provisioning:
 
    ```sh
    docker compose -f scep/compose.yml build scep
-   docker compose -f scep/compose.yml run --rm scep provision
    docker compose -f scep/compose.yml up -d scep
    ```
 
-   Provisioning is a one-off invocation of the same image, not an additional
-   permanent service. Do not rerun it once `ra.json` exists. The `scep-state`
+   On first start, the gateway provisions its RA and starts serving. Later starts
+   reuse `ra.json`. Set `SCEP_AUTO_PROVISION=false` if you prefer to invoke
+   `docker compose -f scep/compose.yml run --rm scep provision` manually before
+   starting the service. The `scep-state`
    volume contains public RA metadata and the KMS key ID; private keys stay in KMS.
-   To use a published image, set `SCEP_IMAGE`, then replace the build command with
-   `docker compose -f scep/compose.yml pull scep` and use `--no-build` for `up` (the `run` command uses the pulled image).
+   To use a published image containing automatic provisioning, set `SCEP_IMAGE`,
+   then replace the build command with `docker compose -f scep/compose.yml pull scep`
+   and use `--no-build` for `up`.
 
 4. Verify discovery, then expose `/scep` through your TLS reverse proxy:
 
@@ -145,6 +147,42 @@ apply `docker/docker-compose.intune.yml` or `docker/docker-compose.mdm.yml` afte
 `scep/compose.yml`, using absolute secret-file paths. Those overlays also only
 configure the existing `scep` service. See the managed-mode instructions below.
 
+### Arcane / a single Compose file: automatic first provisioning
+
+With an existing backend/KMS and a CA-bound SCEP service token, the gateway can
+provision its RA on its first normal start. No shell script, additional service,
+or switch between `provision` and `serve` is required. In your existing `scep`
+service, keep the environment, network, and persistent `/data` volume above and add:
+
+```yaml
+command: ["serve"]
+restart: unless-stopped
+environment:
+  # Merge this entry into your existing environment mapping.
+  SCEP_AUTO_PROVISION: "true"
+depends_on:
+  backend:
+    condition: service_healthy
+```
+
+Enable this only with an image containing the automatic-provisioning change.
+The executable defaults `SCEP_AUTO_PROVISION` to `false`; both supplied Compose
+setups default it to `true`. When enabled and `ra.json` is absent,
+the gateway provisions once and continues with normal RA validation and serving.
+Subsequent starts reuse the saved state; invalid, expired, or revoked state is
+not silently replaced. Run only one replica and keep `/data` persistent.
+
+Before provisioning, the backend must be able to load the integration's issuing
+CA from KMS. This option does not repair missing KMS objects, create a CA, or
+create a service token. Persist the KMS database at its actual configured path
+(for example `/cosmian-kms/sqlite-data`), independently of the SCEP state volume.
+
+If provisioning fails after it starts, `ra.json.provisioning` remains in the
+state volume, preventing repeated creation of orphaned KMS keys on restarts.
+Inspect the logs and KMS objects, fix the cause, and only then remove that marker
+to permit a new attempt. The gateway logs the marker path. A failure to load the
+backend CA before provisioning does not create a marker.
+
 ### Full stack overlay
 
 The gateway is an optional overlay; normal PKI Manager startup is unchanged.
@@ -158,8 +196,13 @@ image, then pull it and start with `--no-build` using the same overlay files.
 The default image name is `pki-manager-scep:local` for local branch builds.
 Upgrade the existing backend to this change, which includes enrollment-state checks;
 do not deploy a second backend for SCEP.
-Cosmian KMS **5.24.0** was used for integration testing. Keep your existing KMS
-configuration/version migration procedure; the overlay does not upgrade it.
+Cosmian KMS **5.24.0** was used for integration testing and is pinned in the full
+stack Compose file. KMS **5.12.1** does not support `Activate` and fails RA provisioning
+with HTTP 404; use the verified 5.24.0 version. For an existing installation, keep
+your KMS configuration/version migration procedure; the SCEP overlay does not
+upgrade it. The full stack mounts `../kms/data` at `/cosmian-kms/sqlite-data`.
+Before changing an existing mount, back up and migrate the actual KMS database:
+the older `/root/cosmian-kms` mount did not cover that default database path.
 
 1. Create a dedicated CA and a **SCEP / MDM** integration with a CA-bound service
    token under **Operations → Integrations**.
@@ -186,16 +229,17 @@ configuration/version migration procedure; the overlay does not upgrade it.
    ```
 
 3. Start the existing backend/KMS stack using its documented configuration, then
-   build and provision the SCEP RA once:
+   build and start SCEP (the RA is automatically provisioned on first start):
 
    ```sh
    cd docker
    docker compose -f docker-compose.yml -f docker-compose.scep.yml --profile scep build scep
-   docker compose -f docker-compose.yml -f docker-compose.scep.yml --profile scep run --rm scep provision
    docker compose -f docker-compose.yml -f docker-compose.scep.yml --profile scep up -d scep
    ```
 
-   Provision refuses to overwrite existing RA state. `scep-state` is a persistent
+   Existing RA state is reused. For manual provisioning instead, set
+   `SCEP_AUTO_PROVISION=false` and run the service with `provision` before `up`.
+   `scep-state` is a persistent
    Docker volume; keep its public metadata together with your KMS backups. A
    partial provisioning failure may leave an orphaned RA key/certificate in KMS:
    investigate the KMS audit trail before retrying. The gateway never exports a
@@ -232,12 +276,30 @@ port/leaf duration. Compose secret source paths may be changed through
 `SCEP_BACKEND_TOKEN_FILE`, `SCEP_CHALLENGE_FILE`, and `SCEP_KMS_API_KEY_FILE`.
 They are resolved relative to `docker/docker-compose.yml`.
 
-The RA has the configured issuance duration too (90 days by default). Monitor its
-expiry. To replace it, stop the gateway, archive its old public `ra.json`, then
-run `provision` and start again; revoke/retire the old RA certificate and KMS key
-through your normal process. Existing device certificates do not depend on the
-RA's continued validity. Clients must rediscover CA/RA certificates after RA
-replacement. Do not delete the KMS key before retaining required metadata.
+The RA has the configured issuance duration too (90 days by default).
+`SCEP_RA_AUTO_RENEW=true` is enabled by default, independently of first provisioning.
+At startup and hourly, the gateway checks whether the RA is in the last third of
+its lifetime (about 30 days remaining for a 90-day certificate), and renews it
+using the existing Sensitive KMS key. The renewed RA and still-valid previous RA
+certificates are saved atomically in `ra.json` before switching the running server.
+`GetCACert` immediately returns the new RA; messages encrypted to a cached previous
+RA are accepted until that certificate expires, provided it remains active.
+Failed renewals leave the current RA in service and are retried hourly with a
+stable backend request UID. Renewal failures are logged as `scep.ra.renew`.
+
+Renewal requires an active, unexpired, service-owned RA and the same active CA.
+An already expired/revoked RA, a missing KMS key, or a changed CA requires manual
+recovery; auto-renewal does not bypass those checks. Monitor renewal failures and
+keep the gateway running before expiry. Existing device certificates do not
+depend on the RA's continued validity. Automatic RA renewal does not rotate the
+KMS key; handle key compromise/rotation separately.
+
+Clients initiate their own renewal; the gateway cannot push certificates to them.
+Configure the SCEP client/MDM to renew before expiry (for example at 20% remaining)
+and rediscover CA/RA certificates. Shared mode requires the configured challenge;
+managed modes require fresh MDM validation. Both require an active, unexpired
+old signer owned by this integration. SAN restrictions remain unchanged. Device
+and platform interoperability must be validated in the deployed environment.
 
 ## Local development and configuration
 
@@ -262,6 +324,8 @@ go build -o scep-server .
 | `SCEP_KMS_API_KEY` or `_FILE` | Optional, according to KMS policy |
 | `SCEP_CHALLENGE` or `_FILE` | Shared mode only; 32–256 bytes |
 | `SCEP_STATE_FILE` | `./data/ra.json`; public RA metadata |
+| `SCEP_AUTO_PROVISION` | `false`; opt in to one-time RA provisioning on `serve` when state is missing |
+| `SCEP_RA_AUTO_RENEW` | `true`; renew the active RA during its last third of validity, checked at startup and hourly |
 | `SCEP_LISTEN` | `:8085`; use loopback when running outside Docker |
 | `SCEP_VALIDITY_DAYS` | `90`, allowed 1–365 |
 
