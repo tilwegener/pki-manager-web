@@ -464,6 +464,29 @@ The [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml) w
 5. **Security**: Trivy vulnerability scanning, SLSA attestation
 6. **Multi-arch**: Builds for `linux/amd64` and `linux/arm64`
 
+### Development images (`:dev`)
+
+The separate [Docker Dev workflow](.github/workflows/docker-dev.yml) publishes
+development images on every push to `main`. To publish another branch, open
+**Actions → Docker Dev → Run workflow** and set **ref** to the branch, tag, or
+commit to build (for example, `feat/scep-mdm-enrollment`). All images in a run
+use the same resolved commit. Each run overwrites these `:dev` tags:
+
+- `ghcr.io/tilwegener/pki-manager-web/backend:dev`
+- `ghcr.io/tilwegener/pki-manager-web/frontend:dev`
+- `ghcr.io/tilwegener/pki-manager-issuer:dev`
+- `ghcr.io/tilwegener/pki-manager-web/scep:dev` when the selected revision contains `scep/Dockerfile`
+
+The registry owner follows the repository running the workflow. Images are built
+for `linux/amd64`, linked to the repository, and published using the built-in
+`GITHUB_TOKEN` with `packages: write`; no additional registry secret is needed.
+The frontend uses the repository variable `VITE_API_URL`, with the same fallback
+as the release workflow. Existing release and `latest` tags are unchanged.
+External services such as KMS and Keycloak use their existing upstream images.
+After the workflow is merged into the default branch, manual runs are available
+in the Actions UI. If anonymous image pulls are required, set the packages'
+visibility to public in GitHub Packages after their first publication.
+
 ### Setup Requirements
 
 1. **Enable GHCR**:
