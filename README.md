@@ -16,6 +16,7 @@ PKI Manager provides complete control over your Public Key Infrastructure (PKI) 
 - **Multi-Type Certificates**: Server (TLS/SSL), Client Auth, S/MIME Email, Code Signing
 - **Secure Key Management**: Integration with Cosmian KMS — private keys never touch disk
 - **Kubernetes-Native**: cert-manager external issuer that auto-signs & auto-approves cluster CSRs (one cluster token = one CA)
+- **SCEP Device Enrollment**: Optional [SCEP gateway](scep/README.md) with Intune challenge validation, managed renewal, MDM validation hooks and KMS-held RA keys
 - **CRL Revocation**: CA-signed Certificate Revocation Lists served over HTTP, with CRL Distribution Points (CDP) embedded in issued certificates
 - **SSH Certificate Authority**: Dual User+Host CA with principals, KRL revocation, and per-host user access blocks pushed to a host agent
 - **Dual API**: Typed tRPC for the SPA *plus* a REST/OpenAPI surface with live Swagger docs (`/api/v1`, `/api/docs`)
@@ -120,8 +121,8 @@ Register Kubernetes clusters and mint scoped tokens for the cert-manager externa
 <table>
   <tr>
     <td width="50%">
-      <img src="assets/14-clusters.png" alt="Kubernetes Clusters" />
-      <p align="center"><em>K8s Clusters — cert-manager issuer tokens</em></p>
+      <img src="assets/14-clusters.png" alt="Integrations" />
+      <p align="center"><em>Integrations — CA-bound service tokens</em></p>
     </td>
     <td width="50%">
       <img src="assets/21-api-docs.png" alt="REST / OpenAPI Docs" />
@@ -220,7 +221,7 @@ revocation, and per-host user access blocks.
 - ✅ **Auto-approves** CertificateRequests via a dedicated approver RBAC role
 - ✅ Scoped cluster tokens — **one cluster token = one CA**
 - ✅ Revoke-on-delete, Prometheus metrics, in-cluster deploy via ingress-nginx
-- ✅ Clusters management page to mint and manage cluster tokens
+- ✅ Integrations management page to mint CA-bound service tokens for Kubernetes and SCEP
 
 ### Monitoring & Alerts
 - ✅ Real-time dashboard with PKI statistics
