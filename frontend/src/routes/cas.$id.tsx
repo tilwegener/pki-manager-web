@@ -498,73 +498,22 @@ function CADetail() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Navigation and CA actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={() => navigate({ to: '/cas' })}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground cursor-pointer"
+          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Certificate Authorities
         </button>
 
-        <div className="flex gap-2 items-center flex-wrap">
-          <select
-            value={selectedFormat}
-            onChange={(e) => setSelectedFormat(e.target.value as any)}
-            className="px-3 py-1.5 text-sm border rounded-md bg-background"
-          >
-            <optgroup label="Certificate (public only)">
-              <option value="pem">PEM - Text format</option>
-              <option value="crt">CRT - Text certificate</option>
-              <option value="der">DER - Binary compact</option>
-              <option value="cer">CER - Windows compatible</option>
-            </optgroup>
-            <optgroup label="Truststore (public only)">
-              <option value="p12-truststore">P12 - PKCS#12 Truststore</option>
-              <option value="jks-truststore">JKS - Java Truststore</option>
-            </optgroup>
-            <optgroup label="Keystore (with private key)">
-              <option value="p12-keystore">P12 - PKCS#12 Keystore</option>
-              <option value="jks-keystore">JKS - Java Keystore</option>
-            </optgroup>
-          </select>
-
-          <ExportPasswordField value={downloadPassword} onChange={isDownloading ? undefined : setDownloadPassword} />
-
-          <button
-            onClick={() => void handleDownload()}
-            disabled={isDownloading || (formatRequiresPassword(selectedFormat) && downloadPassword.length < 8)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
-            {isDownloading ? 'Downloading…' : 'Download'}
-          </button>
-
-          <button
-            title="API URL: an Authorization header is required when OIDC is enabled."
-            onClick={handleCopyPermalink}
-            disabled={formatRequiresPassword(selectedFormat) && downloadPassword.length < 8}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 font-medium shadow-sm disabled:opacity-50"
-          >
-            {linkCopied ? (
-              <>
-                <Check className="h-4 w-4" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Link className="h-4 w-4" />
-                Copy Link
-              </>
-            )}
-          </button>
-
+        <div className="flex flex-wrap items-center gap-2">
           {ca.status === 'active' && (
             <button
               onClick={handleRevoke}
               disabled={revokeMutation.isPending}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-orange-600 text-white rounded-md hover:bg-orange-700 font-medium shadow-sm disabled:opacity-50"
+              className="flex items-center gap-2 min-h-10 px-3 py-2 text-sm bg-orange-600 text-white rounded-md hover:bg-orange-700 font-medium shadow-sm disabled:opacity-50"
             >
               <XCircle className="h-4 w-4" />
               Revoke
@@ -574,13 +523,75 @@ function CADetail() {
           <button
             onClick={handleDelete}
             disabled={deleteMutation.isPending}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 font-medium shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 min-h-10 px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 font-medium shadow-sm disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
             Delete
           </button>
         </div>
       </div>
+
+      {/* Keep export controls together without crowding navigation. */}
+      <section aria-label="Export certificate authority" className="rounded-lg border bg-card p-4 text-card-foreground">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_auto]">
+          <div className="space-y-1">
+            <label htmlFor="ca-export-format" className="block text-sm font-medium">Download format</label>
+            <select
+              id="ca-export-format"
+              value={selectedFormat}
+              onChange={(e) => setSelectedFormat(e.target.value as any)}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <optgroup label="Certificate (public only)">
+                <option value="pem">PEM - Text format</option>
+                <option value="crt">CRT - Text certificate</option>
+                <option value="der">DER - Binary compact</option>
+                <option value="cer">CER - Windows compatible</option>
+              </optgroup>
+              <optgroup label="Truststore (public only)">
+                <option value="p12-truststore">P12 - PKCS#12 Truststore</option>
+                <option value="jks-truststore">JKS - Java Truststore</option>
+              </optgroup>
+              <optgroup label="Keystore (with private key)">
+                <option value="p12-keystore">P12 - PKCS#12 Keystore</option>
+                <option value="jks-keystore">JKS - Java Keystore</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <ExportPasswordField value={downloadPassword} onChange={isDownloading ? undefined : setDownloadPassword} />
+
+          <div className="flex flex-wrap items-center gap-2 xl:pt-6">
+            <button
+              onClick={() => void handleDownload()}
+              disabled={isDownloading || (formatRequiresPassword(selectedFormat) && downloadPassword.length < 8)}
+              className="flex items-center gap-2 min-h-10 px-3 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              {isDownloading ? 'Downloading…' : 'Download'}
+            </button>
+
+            <button
+              title="API URL: an Authorization header is required when OIDC is enabled."
+              onClick={handleCopyPermalink}
+              disabled={formatRequiresPassword(selectedFormat) && downloadPassword.length < 8}
+              className="flex items-center gap-2 min-h-10 px-3 py-2 text-sm border bg-background text-foreground rounded-md hover:bg-muted font-medium shadow-sm disabled:opacity-50"
+            >
+              {linkCopied ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Link className="h-4 w-4" />
+                  Copy Link
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </section>
 
       {lastExport && <div className="p-4 border rounded-md bg-muted/50 space-y-2">
         <p className="text-sm font-medium">Password used for the last {lastExport.format} download</p>

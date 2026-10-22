@@ -26,19 +26,19 @@ export function ExportPasswordField({ value, onChange, id = 'export-password', l
     }
   };
   return (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1">
       <label htmlFor={id} className="block text-sm font-medium">{label}</label>
       <div className="flex flex-wrap items-center gap-2">
         <input id={id} type="text" value={value} readOnly={!onChange}
           onChange={(event) => update(event.target.value)}
           autoComplete="off" spellCheck={false} minLength={8}
-          className="min-w-64 flex-1 px-3 py-2 text-sm font-mono border rounded-md bg-background" />
+          className="h-10 min-w-0 flex-[1_1_16rem] rounded-md border bg-background px-3 py-2 text-sm font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
         <button type="button" onClick={() => void copy()} disabled={!value}
-          className="px-3 py-2 text-sm border rounded-md hover:bg-muted disabled:opacity-50">
+          className="min-h-10 rounded-md border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
           {copiedValue === value ? 'Copied!' : 'Copy password'}
         </button>
         {onChange && <button type="button" onClick={() => update(generateExportPassword())}
-          className="px-3 py-2 text-sm border rounded-md hover:bg-muted">Generate new password</button>}
+          className="min-h-10 rounded-md border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Generate new password</button>}
       </div>
       <p className="text-xs text-muted-foreground">Save this password with the downloaded file. It is not stored for later retrieval.</p>
       {onChange && value.length < 8 && <p role="alert" className="text-xs text-destructive">Use at least 8 characters.</p>}
